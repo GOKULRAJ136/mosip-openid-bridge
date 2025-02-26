@@ -17,7 +17,7 @@
 		<maven.compiler.target>21</maven.compiler.target>
 		<maven.compiler.version>3.8.0</maven.compiler.version>
 		<!-- <maven.surefire.plugin.version>2.22.0</maven.surefire.plugin.version> -->
-
+		<springdoc.openapi.version>2.6.0</springdoc.openapi.version>
 		<maven.jar.plugin.version>3.0.2</maven.jar.plugin.version>
 		<maven.war.plugin.version>3.1.0</maven.war.plugin.version>
 		<!-- <maven.jacoco.plugin.version>0.8.1</maven.jacoco.plugin.version> -->
@@ -31,7 +31,7 @@
 		<sonar.coverage.exclusions>**/constant/**,**/config/**,**/httpfilter/**,**/cache/**,**/entity/**,**/model/**,**/exception/**,**/repository/**,**/verticle/**,**/spi/**,"**/proxy/**","**/ProxyAuthServiceImpl.java","**/ProxyOTPServiceImpl.java","**/dto/**","**/util/**","**/filter/**","**/intercepter/**","**/AuthBootApplication.java"</sonar.coverage.exclusions>
 		<sonar.cpd.exclusions>**/dto/**,**/entity/**,**/config/**,"**/ProxyAuthServiceImpl.java","**/ProxyTokenGenerator.java"</sonar.cpd.exclusions>
 		
-		<apache.directory.api.version>2.0.0.AM2</apache.directory.api.version>
+		<apache.directory.api.version>2.0.1</apache.directory.api.version>
 
 	</properties>
 	<dependencyManagement>
@@ -80,6 +80,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		 <dependency>
+        		<groupId>org.springdoc</groupId>
+        		<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			 <version>${springdoc.openapi.version}</version>
+    		</dependency>
 		<dependency>
         		<groupId>org.springdoc</groupId>
         		<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
