@@ -38,6 +38,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.springframework.http.MediaType;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import io.mosip.kernel.auth.defaultimpl.constant.AuthConstant;
 import io.mosip.kernel.auth.defaultimpl.constant.AuthErrorCode;
@@ -150,12 +153,16 @@ public class KeycloakImpl implements DataStore {
 	private ObjectMapper objectMapper;
 
 	private String individualRoleID;
+	@Value("${mosip.iam.admin.client.secret}")
+	private String adminClientSecret;
+	private String adminToken;
 	private final ConcurrentHashMap<String, String> roleCache = new ConcurrentHashMap<>();
 	private static final Logger LOGGER = LoggerFactory.getLogger(KeycloakImpl.class);
 
 	@PostConstruct
 	private void setup() {
 		setUpConnection();
+		refreshAdminToken();
 	}
 
 	private void setUpConnection() {
@@ -173,6 +180,24 @@ public class KeycloakImpl implements DataStore {
 		jdbcTemplate = new NamedParameterJdbcTemplate(dataSource);
 	}
 
+	private void refreshAdminToken() {
+		try {
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+			MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+			map.add("grant_type", "client_credentials");
+			map.add("client_id", "admin-cli");
+			map.add("client_secret", adminClientSecret);
+			HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(map, headers);
+			ResponseEntity<String> response = restTemplate.exchange(keycloakBaseUrl + "/realms/" + adminRealmId + "/protocol/openid-connect/token", HttpMethod.POST, entity, String.class);
+			JsonNode node = objectMapper.readTree(response.getBody());
+			adminToken = node.get("access_token").asText();
+		} catch (Exception e) {
+			LOGGER.error("Failed to get admin token", e);
+			throw new AuthManagerException(AuthErrorCode.SERVER_ERROR.getErrorCode(), AuthErrorCode.SERVER_ERROR.getErrorMessage());
+		}
+	}
+
 	@Override
 	public RolesListDto getAllRoles(String appId) {
 
@@ -180,6 +205,7 @@ public class KeycloakImpl implements DataStore {
 		pathParams.put(AuthConstant.REALM_ID, appId);
 		UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder.fromUriString(keycloakAdminUrl + roles);
 		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
 		HttpEntity<String> httpEntity = new HttpEntity<>(null, httpHeaders);
 		String response = callKeycloakService(uriComponentsBuilder.buildAndExpand(pathParams).toString(),
 				HttpMethod.GET, httpEntity);
@@ -225,8 +251,9 @@ public class KeycloakImpl implements DataStore {
 				.queryParam(AuthConstant.MAX, 1)
 				.buildAndExpand(path)
 				.toString();
-
-		String response = callKeycloakService(uri, HttpMethod.GET, new HttpEntity<>(new HttpHeaders()));
+		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
+		String response = callKeycloakService(uri, HttpMethod.GET, new HttpEntity<>(httpHeaders));
 		List<MosipUserDto> list = new java.util.ArrayList<>(1);
 
 		try {
@@ -268,15 +295,15 @@ public class KeycloakImpl implements DataStore {
 	private MosipUserListDto getListOfUsersDetailsSlowPath(List<String> userDetails, String realmId) throws Exception {
 		Set<String> wanted = new HashSet<>(userDetails.size());
 		for (String u : userDetails) if (u != null) wanted.add(u.toLowerCase(Locale.ROOT));
-
 		Map<String,String> path = Map.of(AuthConstant.REALM_ID, realmId);
 		var uri = UriComponentsBuilder.fromUriString(keycloakAdminUrl + users)
 				.queryParam(AuthConstant.MAX, maxUsers)
 				.queryParam(AuthConstant.BRIEF_REPRESENTATION, true)
 				.buildAndExpand(path)
 				.toString();
-
-		String response = callKeycloakService(uri, HttpMethod.GET, new HttpEntity<>(new HttpHeaders()));
+		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
+		String response = callKeycloakService(uri, HttpMethod.GET, new HttpEntity<>(httpHeaders));
 		List<MosipUserDto> mosipUserDtos = new ArrayList<>();
 
 		try {
@@ -367,6 +394,7 @@ public class KeycloakImpl implements DataStore {
 		Map<String, String> pathParams = new HashMap<>();
 		pathParams.put(AuthConstant.REALM_ID, appId);
 		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
 		HttpEntity<String> httpEntity = new HttpEntity<>(null, httpHeaders);
 		UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder
 				.fromUriString(keycloakAdminUrl + users + "?username=" + userId);
@@ -643,29 +671,42 @@ public class KeycloakImpl implements DataStore {
 		ResponseEntity<String> responseEntity = null;
 		String response = null;
 		try {
-
 			responseEntity = restTemplate.exchange(url, httpMethod, requestEntity, String.class);
 		} catch (HttpServerErrorException | HttpClientErrorException ex) {
 			List<ServiceError> validationErrorsList = ExceptionUtils.getServiceErrorList(ex.getResponseBodyAsString());
 
 			if (ex.getRawStatusCode() == 401) {
-				if (!validationErrorsList.isEmpty()) {
-					throw new AuthNException(validationErrorsList);
-				} else {
-					throw new BadCredentialsException("Authentication failed from AuthManager");
+				// Refresh admin token and retry once
+				try {
+					refreshAdminToken();
+					if (requestEntity.getHeaders().containsKey("Authorization")) {
+						requestEntity.getHeaders().set("Authorization", "Bearer " + adminToken);
+					}
+					responseEntity = restTemplate.exchange(url, httpMethod, requestEntity, String.class);
+				} catch (Exception retryEx) {
+					if (retryEx instanceof HttpServerErrorException || retryEx instanceof HttpClientErrorException) {
+						HttpClientErrorException retryHttpEx = (HttpClientErrorException) retryEx;
+						if (retryHttpEx.getRawStatusCode() == 401) {
+							if (!validationErrorsList.isEmpty()) {
+								throw new AuthNException(validationErrorsList);
+							} else {
+								throw new BadCredentialsException("Authentication failed from AuthManager");
+							}
+						}
+					}
+					throw new AuthManagerException(AuthErrorCode.SERVER_ERROR.getErrorCode(),
+							AuthErrorCode.SERVER_ERROR.getErrorMessage());
 				}
-			}
-			if (ex.getRawStatusCode() == 403) {
+			} else if (ex.getRawStatusCode() == 403) {
 				if (!validationErrorsList.isEmpty()) {
 					throw new AuthZException(validationErrorsList);
 				} else {
 					throw new AccessDeniedException("Access denied from AuthManager");
 				}
+			} else {
+				throw new AuthManagerException(AuthErrorCode.SERVER_ERROR.getErrorCode(),
+						AuthErrorCode.SERVER_ERROR.getErrorMessage());
 			}
-
-			throw new AuthManagerException(AuthErrorCode.SERVER_ERROR.getErrorCode(),
-					AuthErrorCode.SERVER_ERROR.getErrorMessage());
-
 		}
 		if (responseEntity != null && responseEntity.hasBody() && responseEntity.getStatusCode() == HttpStatus.OK) {
 			response = responseEntity.getBody();
@@ -747,6 +788,7 @@ public class KeycloakImpl implements DataStore {
 		UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder
 				.fromUriString(keycloakAdminUrl + users + roleUserMappingurl);
 		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
 		HttpEntity<String> httpEntity = new HttpEntity<>(null, httpHeaders);
 		String response = callKeycloakService(uriComponentsBuilder.buildAndExpand(pathParams).toString(),
 				HttpMethod.GET, httpEntity);
@@ -777,6 +819,7 @@ public class KeycloakImpl implements DataStore {
 		UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder
 				.fromUriString(keycloakBaseUrl + "/roles/" + roleName);
 		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
 		HttpEntity<String> httpEntity = new HttpEntity<>(null, httpHeaders);
 		String response = callKeycloakService(uriComponentsBuilder.buildAndExpand(pathParams).toString(),
 				HttpMethod.GET, httpEntity);
@@ -792,6 +835,7 @@ public class KeycloakImpl implements DataStore {
 		Map<String, String> pathParams = new HashMap<>();
 		pathParams.put(AuthConstant.REALM_ID, realmID);
 		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
 		HttpEntity<String> httpEntity = new HttpEntity<>(null, httpHeaders);
 		UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder
 				.fromUriString(keycloakAdminUrl + users + "?username=" + userId);
@@ -838,7 +882,9 @@ public class KeycloakImpl implements DataStore {
 		Map<String, String> pathParams = new HashMap<>();
 		UriComponentsBuilder uriComponentsBuilder = null;
 		boolean isRoleBasedSearch = false;
-		HttpEntity<String> httpEntity = new HttpEntity<>(null, new HttpHeaders());
+		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "Bearer " + adminToken);
+		HttpEntity<String> httpEntity = new HttpEntity<>(null, httpHeaders);
 		if (roleName != null && !roleName.isBlank() && !roleName.isEmpty()) {
 			pathParams.put(AuthConstant.ROLE_NAME, roleName);
 			pathParams.put(AuthConstant.REALM, realmId);
