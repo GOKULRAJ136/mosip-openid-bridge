@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.annotation.PostConstruct;
 import javax.xml.bind.DatatypeConverter;
@@ -149,6 +150,7 @@ public class KeycloakImpl implements DataStore {
 	private ObjectMapper objectMapper;
 
 	private String individualRoleID;
+	private final ConcurrentHashMap<String, String> roleCache = new ConcurrentHashMap<>();
 	private static final Logger LOGGER = LoggerFactory.getLogger(KeycloakImpl.class);
 
 	@PostConstruct
@@ -733,6 +735,11 @@ public class KeycloakImpl implements DataStore {
 	 * @throws IOException Signals that an I/O exception has occurred.
 	 */
 	private String getRolesAsString(String userId, String realmId) throws IOException {
+		String cacheKey = realmId + ":" + userId;
+		String cachedRoles = roleCache.get(cacheKey);
+		if (cachedRoles != null) {
+			return cachedRoles;
+		}
 		StringBuilder roleBuilder = new StringBuilder();
 		Map<String, String> pathParams = new HashMap<>();
 		pathParams.put(AuthConstant.REALM_ID, realmId);
@@ -749,7 +756,9 @@ public class KeycloakImpl implements DataStore {
 			Objects.nonNull(role);
 			roleBuilder.append(role).append(AuthConstant.COMMA);
 		}
-		return roleBuilder.length() > 0 ? roleBuilder.substring(0, roleBuilder.length() - 1) : "";
+		String roles = roleBuilder.length() > 0 ? roleBuilder.substring(0, roleBuilder.length() - 1) : "";
+		roleCache.put(cacheKey, roles);
+		return roles;
 	}
 
 	/**
