@@ -4,7 +4,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.when;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -23,7 +22,6 @@ import io.mosip.kernel.openid.bridge.api.service.AuthService;
 @SpringBootTest(classes = { AuthTestBootApplication.class })
 @RunWith(SpringRunner.class)
 @AutoConfigureMockMvc
-@Ignore
 public class TokenGenerationServiceTest {
 
 

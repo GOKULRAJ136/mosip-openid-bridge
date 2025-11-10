@@ -13,7 +13,6 @@ import java.util.List;
 
 import jakarta.servlet.http.Cookie;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -52,7 +51,6 @@ import io.mosip.kernel.openid.bridge.api.service.AuthService;
 @SpringBootTest(classes = { AuthTestBootApplication.class })
 @RunWith(SpringRunner.class)
 @AutoConfigureMockMvc
-@Ignore
 public class AuthControllerTest {
 
 	@Value("${mosip.security.secure-cookie:false}")

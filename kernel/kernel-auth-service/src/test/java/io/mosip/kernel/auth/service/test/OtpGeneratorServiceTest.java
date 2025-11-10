@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 
 import java.nio.charset.Charset;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -37,7 +36,6 @@ import io.mosip.kernel.core.authmanager.model.OtpUser;
 @SpringBootTest(classes = { AuthTestBootApplication.class })
 @RunWith(SpringRunner.class)
 @AutoConfigureMockMvc
-@Ignore
 public class OtpGeneratorServiceTest {
 
 	@Qualifier("authRestTemplate")

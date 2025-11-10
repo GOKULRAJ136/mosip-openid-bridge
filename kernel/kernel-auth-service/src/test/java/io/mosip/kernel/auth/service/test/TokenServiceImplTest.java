@@ -5,7 +5,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -23,7 +22,6 @@ import io.mosip.kernel.auth.test.AuthTestBootApplication;
 @SpringBootTest(classes = { AuthTestBootApplication.class })
 @RunWith(SpringRunner.class)
 @AutoConfigureMockMvc
-@Ignore
 public class TokenServiceImplTest {
 
 	TokenService tokenService = null;
