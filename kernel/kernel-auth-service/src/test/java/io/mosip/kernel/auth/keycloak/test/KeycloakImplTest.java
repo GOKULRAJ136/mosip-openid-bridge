@@ -308,37 +308,17 @@ public class KeycloakImplTest {
 
 	@Test
 	public void getIndividualIdFromUserIdTest() throws Exception {
-		// Mock Keycloak admin token refresh
-		String tokenResponse = "{\"access_token\": \"mock-token\", \"expires_in\": 3600}";
-		when(restTemplate.exchange(
-				Mockito.contains("protocol/openid-connect/token"),
-				Mockito.eq(HttpMethod.POST),
-				Mockito.any(),
-				Mockito.eq(String.class))
-		).thenReturn(ResponseEntity.ok(tokenResponse));
-
-		// Mock user lookup response
 		String userIDResp = "[{\"username\": \"mock-user\",\"attributes\":{\"individualId\":[\"8291930201\"]} }]";
 		Map<String, String> pathParams = new HashMap<>();
 		pathParams.put(AuthConstant.REALM_ID, "ida");
-
 		UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder
 				.fromUriString(keycloakAdminUrl + users + "?username=" + "mock-user");
-
-		when(restTemplate.exchange(
-				Mockito.eq(uriComponentsBuilder.buildAndExpand(pathParams).toString()),
-				Mockito.eq(HttpMethod.GET),
-				Mockito.any(),
-				Mockito.eq(String.class))
-		).thenReturn(ResponseEntity.ok(userIDResp));
-
-		// Call the method under test
+		when(restTemplate.exchange(Mockito.eq(uriComponentsBuilder.buildAndExpand(pathParams).toString()),
+				Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(String.class)))
+				.thenReturn(ResponseEntity.ok(userIDResp));
 		IndividualIdDto rolesListDto = keycloakImpl.getIndividualIdFromUserId("mock-user", "ida");
-
-		// Validate result
 		assertThat(rolesListDto.getIndividualId(), is("8291930201"));
 	}
-
 
 	@Test(expected = AuthManagerException.class)
 	public void getIndividualIdFromUserIdAuthManagerExceptionTest() throws Exception {
