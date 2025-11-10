@@ -643,9 +643,17 @@ public class KeycloakImpl implements DataStore {
 		ResponseEntity<String> responseEntity = null;
 		String response = null;
 		try {
+			LOGGER.info("[KeycloakImpl] Initiating call to Keycloak URL: {}", url);
+			LOGGER.info("[KeycloakImpl] HTTP Method: {}", httpMethod);
 
 			responseEntity = restTemplate.exchange(url, httpMethod, requestEntity, String.class);
+
+			LOGGER.info("[KeycloakImpl] Keycloak responded with status: {}", responseEntity.getStatusCode());
+
 		} catch (HttpServerErrorException | HttpClientErrorException ex) {
+			LOGGER.error("[KeycloakImpl] Error calling Keycloak. Status: {}, Response Body: {}",
+					ex.getRawStatusCode(), ex.getResponseBodyAsString(), ex);
+
 			List<ServiceError> validationErrorsList = ExceptionUtils.getServiceErrorList(ex.getResponseBodyAsString());
 
 			if (ex.getRawStatusCode() == 401) {
@@ -788,6 +796,7 @@ public class KeycloakImpl implements DataStore {
 
 	@Override
 	public IndividualIdDto getIndividualIdFromUserId(String userId, String realmID) {
+		LOGGER.info("[KeycloakImpl] Fetching IndividualId for user: {} in realm: {}", userId, realmID);
 		IndividualIdDto individualIdDto = new IndividualIdDto();
 		Map<String, String> pathParams = new HashMap<>();
 		pathParams.put(AuthConstant.REALM_ID, realmID);
@@ -803,15 +812,18 @@ public class KeycloakImpl implements DataStore {
 		}
 		try {
 			JsonNode node = objectMapper.readTree(response);
+			LOGGER.info("[KeycloakImpl] Parsing Keycloak response for userId: {}", userId);
 			for (JsonNode jsonNode : node) {
 				if (jsonNode.get(AuthConstant.USER_NAME).textValue().equals(userId)) {
 					JsonNode attriNode = jsonNode.get(AuthConstant.ATTRIBUTES);
 					String individualId = null;
 					if (attriNode.has(AuthConstant.INDIVIDUAL_ID))
 						individualId = attriNode.get(AuthConstant.INDIVIDUAL_ID).get(0).textValue();
+						LOGGER.info("[KeycloakImpl] Found individualId (INDIVIDUAL_ID) for {}: {}", userId, individualId);
 					if (attriNode.has(AuthConstant.INDIVIDUALID))
 						individualId = attriNode.get(AuthConstant.INDIVIDUALID).get(0).textValue();
-						
+						LOGGER.info("[KeycloakImpl] Found individualId (INDIVIDUALID) for {}: {}", userId, individualId);
+
 					if (Objects.nonNull(individualId)) {
 						LOGGER.info("Found Individual Id for the input user: " + userId + ", Id: " + individualId);
 						individualIdDto.setIndividualId(individualId);
@@ -828,6 +840,8 @@ public class KeycloakImpl implements DataStore {
 			throw new AuthManagerException(AuthErrorCode.IO_EXCEPTION.getErrorCode(),
 					AuthErrorCode.IO_EXCEPTION.getErrorMessage());
 		}
+
+		LOGGER.info("[KeycloakImpl] Successfully fetched Individual Id for user: {}", userId);
 
 		return individualIdDto;
 	}
