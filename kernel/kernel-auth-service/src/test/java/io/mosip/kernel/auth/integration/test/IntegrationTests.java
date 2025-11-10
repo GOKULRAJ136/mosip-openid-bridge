@@ -99,7 +99,7 @@ public class IntegrationTests {
 	@MockBean
 	RestTemplate authRestTemplate;
 
-	@Qualifier("selfTokenRestTemplate")
+	@Qualifier("keycloakRestTemplate")
 	@MockBean
 	private RestTemplate keycloakRestTemplate;
 
