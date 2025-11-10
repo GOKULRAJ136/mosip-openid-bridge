@@ -104,7 +104,7 @@ public class KeycloakImpl implements DataStore {
 	private String roleUserMappingurl;
 
 	@Autowired
-	@Qualifier("keycloakRestTemplate")
+	@Qualifier("selfTokenRestTemplate")
 	private RestTemplate restTemplate;
 
 	@Value("${db_3_DS.keycloak.ipaddress}")
